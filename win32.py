@@ -55,6 +55,70 @@ CF_BITMAP = 2
 # Copies the source rectangle directly to the destination rectangle
 SRCCOPY = 13369376
 
+DIB_RGB_COLORS = 0x00
+DIB_PAL_COLORS = 0x01
+DIB_PAL_INDICES = 0x02
+
+
+# https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
+# class BITMAPFILEHEADER(ctypes.Structure):
+#     _pack_ = 1  # structure field byte alignment
+#     _fields_ = [
+#         ('bfType', ctypes.wintypes.WORD),  # file type ("BM")
+#         ('bfSize', ctypes.wintypes.DWORD),  # file size in bytes
+#         ('bfReserved1', ctypes.wintypes.WORD),  # must be zero
+#         ('bfReserved2', ctypes.wintypes.WORD),  # must be zero
+#         ('bfOffBits', ctypes.wintypes.DWORD),  # byte offset to the pixel array
+#     ]
+
+class BITMAPFILEHEADER(ctypes.Structure):
+    _pack_ = 1  # structure field byte alignment
+    _fields_ = [
+        ('bfType', ctypes.c_ushort),  # file type ("BM")
+        ('bfSize', ctypes.c_ulong),  # file size in bytes
+        ('bfReserved1', ctypes.c_ushort),  # must be zero
+        ('bfReserved2', ctypes.c_ushort),  # must be zero
+        ('bfOffBits', ctypes.c_ulong),  # byte offset to the pixel array
+    ]
+
+
+# https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfoheader
+class BITMAPINFOHEADER(ctypes.Structure):
+    _pack_ = 1  # structure field byte alignment
+    _fields_ = [
+        ('biSize', ctypes.wintypes.DWORD),
+        ('biWidth', ctypes.wintypes.LONG),
+        ('biHeight', ctypes.wintypes.LONG),
+        ('biPLanes', ctypes.wintypes.WORD),
+        ('biBitCount', ctypes.wintypes.WORD),
+        ('biCompression', ctypes.wintypes.DWORD),
+        ('biSizeImage', ctypes.wintypes.DWORD),
+        ('biXPelsPerMeter', ctypes.wintypes.LONG),
+        ('biYPelsPerMeter', ctypes.wintypes.LONG),
+        ('biClrUsed', ctypes.wintypes.DWORD),
+        ('biClrImportant', ctypes.wintypes.DWORD)
+    ]
+
+
+# https://docs.microsoft.com/de-de/windows/win32/api/wingdi/ns-wingdi-rgbquad
+class RGBQUAD(ctypes.Structure):
+    _pack_ = 1  # structure field byte alignment
+    _fields_ = [
+        ('rgbBlue', ctypes.wintypes.BYTE),
+        ('rgbGreen', ctypes.wintypes.BYTE),
+        ('rgbRed', ctypes.wintypes.BYTE),
+        ('rgbReserved', ctypes.wintypes.BYTE)
+    ]
+
+
+# https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfo
+class BITMAPINFO(ctypes.Structure):
+    _fields_ = [
+        ('bmiHeader', BITMAPINFOHEADER),
+        ('bmiColors', ctypes.POINTER(RGBQUAD))
+    ]
+
+
 
 def get_module_name_from_window_handle(hWnd: ctypes.wintypes.HWND) -> str:
     """little wrapper around windows API calls to get the full filename of the exe of a window from its handle"""
@@ -69,7 +133,7 @@ def bring_window_to_top(hWnd: ctypes.wintypes.HWND) -> None:
         # arbitrary value to wait until the restore animation has been played
         sleep(1000)
     set_window_pos(hWnd, HWND_TOPMOST, 0, 0, 0, 0,
-                                      SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_FRAMECHANGED)
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_FRAMECHANGED)
 
 
 def set_foreground_window(hWnd: ctypes.wintypes.HWND) -> bool:
@@ -211,6 +275,30 @@ def close_clipboard() -> bool:
     return CloseClipboard()
 
 
+def global_lock(hMem: ctypes.wintypes.HGLOBAL) -> ctypes.wintypes.LPVOID:
+    """see https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock"""
+    GlobalLock = ctypes.windll.Kernel32.GlobalLock
+    GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalLock.restype = ctypes.wintypes.LPVOID
+    return GlobalLock(hMem)
+
+
+def global_unlock(hMem: ctypes.wintypes.HGLOBAL) -> bool:
+    """see https://docs.microsoft.com/de-de/windows/win32/api/winbase/nf-winbase-globalunlock"""
+    GlobalUnlock = ctypes.windll.Kernel32.GlobalUnlock
+    GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalUnlock.restype = ctypes.wintypes.BOOL
+    return GlobalUnlock(hMem)
+
+
+def global_size(hMem: ctypes.wintypes.HGLOBAL) -> ctypes.wintypes.SIZE:
+    """see https://docs.microsoft.com/de-de/windows/win32/api/winbase/nf-winbase-globalsize"""
+    GlobalSize = ctypes.windll.Kernel32.GlobalSize
+    GlobalSize.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalSize.restype = ctypes.wintypes.SIZE
+    return GlobalSize(hMem)
+
+
 def get_system_metric(nIndex: int) -> int:
     """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmetrics"""
     GetSystemMetrics = ctypes.windll.user32.GetSystemMetrics
@@ -289,7 +377,7 @@ def create_compatible_bitmap(hdc: ctypes.wintypes.HDC, cx: int, cy: int) -> ctyp
     return CreateCompatibleBitmap(hdc, cx, cy)
 
 
-def select_object(hdc: ctypes.wintypes.HDC, h:  ctypes.wintypes.HGDIOBJ) -> ctypes.wintypes.HGDIOBJ:
+def select_object(hdc: ctypes.wintypes.HDC, h: ctypes.wintypes.HGDIOBJ) -> ctypes.wintypes.HGDIOBJ:
     """see https://docs.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-selectobject"""
     SelectObject = ctypes.windll.Gdi32.SelectObject
     SelectObject.argtypes = [ctypes.wintypes.HDC, ctypes.wintypes.HGDIOBJ]
@@ -314,3 +402,49 @@ def set_stretch_blt_mode(hdc: ctypes.wintypes.HDC, mode: int) -> int:
     SetStretchBltMode.argtypes = [ctypes.wintypes.HDC, ctypes.wintypes.INT]
     SetStretchBltMode.restype = ctypes.wintypes.HDC
     return SetStretchBltMode(hdc, mode)
+
+
+def get_di_bits(hdc: ctypes.wintypes.HDC, hbm: ctypes.wintypes.HBITMAP, start: ctypes.wintypes.UINT,
+                cLines: ctypes.wintypes.UINT, lpvBits: ctypes.wintypes.LPVOID,
+                lpbmi: ctypes.wintypes.LPVOID, usage: ctypes.wintypes.UINT) -> int:
+    """see https://docs.microsoft.com/de-de/windows/win32/api/wingdi/nf-wingdi-getdibits?redirectedfrom=MSDN"""
+    GetDIBits = ctypes.windll.Gdi32.GetDIBits
+    GetDIBits.argtypes = [ctypes.wintypes.HDC, ctypes.wintypes.HBITMAP, ctypes.wintypes.UINT, ctypes.wintypes.UINT,
+                          ctypes.wintypes.LPVOID, ctypes.wintypes.LPVOID, ctypes.wintypes.UINT]
+    GetDIBits.restype = ctypes.wintypes.INT
+    return GetDIBits(hdc, hbm, start, cLines, lpvBits, lpbmi, usage)
+
+
+def get_bitmapinfo_from_bitmap(hdc: ctypes.wintypes.HDC, hbm: ctypes.wintypes.HBITMAP) -> [BITMAPINFO, bytearray]:
+    """wrapper function to extract pixel data from a bitmap handle"""
+    info = BITMAPINFO()
+    info.bmiHeader.biSize = ctypes.sizeof(info.bmiHeader)
+    if 0 == get_di_bits(hdc, hbm, 0, 0, None, ctypes.byref(info), DIB_RGB_COLORS):
+        return None, None
+    pixels = bytearray(info.bmiHeader.biSizeImage)
+    char_array = ctypes.c_char * len(pixels)
+    if 0 == get_di_bits(hdc, hbm, 0, info.bmiHeader.biHeight, char_array.from_buffer(pixels), ctypes.byref(info), DIB_RGB_COLORS):
+        return None, None
+    return info, pixels
+
+
+#
+#
+# def ole_create_picture_indirect(lpPictDesc: ctypes.wintypes.LPPICTDESC, riid: ctypes.wintypes.REFIID,
+#                                 fOwn: ctypes.wintypes.BOOL, lplpvObj: ctypes.wintypes.LPVOID) -> int:
+#     """see https://docs.microsoft.com/en-us/windows/win32/api/olectl/nf-olectl-olecreatepictureindirect"""
+#     OleCreatePictureIndirect = ctypes.windll.OleAut32.OleCreatePictureIndirect
+#     OleCreatePictureIndirect.argtypes = [ctypes.wintypes.LPPICTDESC, ctypes.wintypes.REFIID,
+#                                          ctypes.wintypes.BOOL, ctypes.wintypes.LPVOID]
+#     OleCreatePictureIndirect.restype = ctypes.wintypes.INT
+#     return OleCreatePictureIndirect(lpPictDesc, riid, fOwn, lplpvObj)
+#
+#
+# def create_stream_on_h_global(hGlobal: ctypes.wintypes.HGLOBAL, fDeleteOnRelease: ctypes.wintypes.BOOL,
+#                               ppstm: ctypes.wintypes.LPVOID) -> int:
+#     """see https://docs.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-createstreamonhglobal"""
+#     CreateStreamOnHGlobal = ctypes.windll.Ole32.CreateStreamOnHGlobal
+#     CreateStreamOnHGlobal.argtypes = [ctypes.wintypes.HGLOBAL, ctypes.wintypes.BOOL, ctypes.wintypes.LPVOID]
+#     CreateStreamOnHGlobal.restype = ctypes.wintypes.INT
+#     return CreateStreamOnHGlobal(hGlobal, fDeleteOnRelease, ppstm)
+
