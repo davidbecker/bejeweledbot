@@ -2,6 +2,9 @@ from enum import Enum, IntEnum
 from typing import List
 import logging
 
+# global level increase for now
+logging.getLogger().setLevel(logging.DEBUG)
+
 
 class GamePhase(Enum):
     UNKNOWN = 0,
@@ -29,6 +32,7 @@ COUNT_GEMS_H = COUNT_GEMS_V = 8
 
 class GameState:
     """class representing the current game state"""
+
     # unused at the moment
     phase: GamePhase
 
@@ -36,7 +40,7 @@ class GameState:
     gems: List[List[GemType]]
     certainty: List[List[float]]
 
-    def reset(self):
+    def reset(self) -> None:
         self.phase = GamePhase.UNKNOWN
         self.gems: List[List[GemType]] = [[GemType.UNKNOWN for j in range(COUNT_GEMS_H)] for i in range(COUNT_GEMS_V)]
         self.certainty: List[List[float]] = [[0.0 for j in range(COUNT_GEMS_H)] for i in range(COUNT_GEMS_V)]
@@ -71,7 +75,16 @@ class GameState:
             logging.error('tried to override gem {} (certainty {}) at ({},{}) with gem {} (certainty {})'.format(
                 self.gems[x][y].name, self.certainty[x][y], x, y, gem.name, certainty))
             return False
+        if self.gems[x][y] != GemType.UNKNOWN and self.gems[x][y] != gem:
+            logging.debug('overridden gem {} (certainty {}) at ({},{}) with gem {} (certainty {})'.format(
+                self.gems[x][y].name, self.certainty[x][y], x, y, gem.name, certainty))
         self.gems[x][y] = gem
         self.certainty[x][y] = certainty
         return True
 
+    def check_board_complete(self) -> bool:
+        for y in range(COUNT_GEMS_V):
+            for x in range(COUNT_GEMS_H):
+                if self.gems[x][y] == GemType.UNKNOWN:
+                    return False
+        return True
