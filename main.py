@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import model
 
-
 # title of the game window to search for
 TITLE_BEJEWELED1 = 'Bejeweled Deluxe 1.87'
 # TITLE_BEJEWELED2 = 'Bejeweled 2 Deluxe 1.0'
@@ -211,6 +210,24 @@ def translate_picture_coordinates_to_model(min_point: tuple, max_point: tuple, p
     return x, y
 
 
+def dump(msg: str = 'dump content to file', state: model.GameState = None, image=None) -> None:
+    """dumps current game state to a file as well as saving the screenshot"""
+    import time
+    filename = DUMP_FILENAME + str(int(time.time()))
+    log_file_name = filename + '.log'
+    logging.error('{} - dumping to {}'.format(msg, log_file_name))
+
+    fh = logging.FileHandler(filename)
+    fh.setLevel(logging.DEBUG)
+    file_logger = logging.getLogger("file")
+    file_logger.addHandler(fh)
+    file_logger.error(msg)
+    if state is not None:
+        file_logger.info(state)
+    if image is not None:
+        cv2.imwrite(filename + '.bmp', image)
+
+
 def get_game_state(screenshot) -> model.GameState:
     if screenshot is None:
         return None
@@ -264,18 +281,7 @@ def get_game_state(screenshot) -> model.GameState:
         gs.phase = model.GamePhase.IN_GAME
 
     if gs.phase == model.GamePhase.UNKNOWN:
-        import time
-        filename = DUMP_FILENAME + str(int(time.time()))
-        log_file_name = filename + '.log'
-        logging.error('failed to get game state - dumping to {}'.format(log_file_name))
-
-        fh = logging.FileHandler(filename)
-        fh.setLevel(logging.DEBUG)
-        file_logger = logging.getLogger("file")
-        file_logger.addHandler(fh)
-        file_logger.error('failed to get complete game state')
-        file_logger.info(gs)
-        cv2.imwrite(filename + '.bmp', screenshot)
+        dump(msg='failed to get game state', state=gs, image=screenshot)
         exit(-1)
     return gs
 
