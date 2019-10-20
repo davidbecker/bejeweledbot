@@ -105,3 +105,27 @@ class GameState:
                 if self.gems[x][y] == GemType.UNKNOWN:
                     return False
         return True
+
+
+def check_bounds(point: tuple) -> bool:
+    """checks if a given point matches the boundaries of the game board"""
+    if point is None or not hasattr(point, '__len__') or point.__len__() < 2:
+        raise ValueError('invalid point {} - expected tuple'.format(point))
+    return 0 <= point[0] < COUNT_GEMS_H and 0 <= point[1] < COUNT_GEMS_V
+
+
+def debug_get_neighbours(game_state: GameState, point: tuple) -> str:
+    """helper function to get the surrounding gems of a position"""
+    if game_state is None or not check_bounds(point):
+        return ValueError()
+    temp_list = []
+    for dy in reversed(range(-1, 2)):
+        for dx in range(-1, 2):
+            if check_bounds((point[0]+dx, point[1]+dy)):
+                temp_list.append('{}'.format(game_state.gems[point[0]+dx][point[1]+dy].value))
+            else:
+                temp_list.append('#')
+        temp_list.append('\n')
+    return ''.join(temp_list)
+
+
