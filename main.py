@@ -211,7 +211,7 @@ def translate_picture_coordinates_to_model(min_point: tuple, max_point: tuple, p
     return x, y
 
 
-def get_game_state(screenshot):
+def get_game_state(screenshot) -> model.GameState:
     if screenshot is None:
         return None
     imggray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
@@ -262,7 +262,8 @@ def get_game_state(screenshot):
     complete = gs.check_board_complete()
     if complete:
         gs.phase = model.GamePhase.IN_GAME
-    else:
+
+    if gs.phase == model.GamePhase.UNKNOWN:
         import time
         filename = DUMP_FILENAME + str(int(time.time()))
         log_file_name = filename + '.log'
@@ -276,10 +277,11 @@ def get_game_state(screenshot):
         file_logger.info(gs)
         cv2.imwrite(filename + '.bmp', screenshot)
         exit(-1)
+    return gs
 
 
 # img = get_screenshot()
 img = cv2.imread("screenshot.bmp")
-get_game_state(img)
+game_state = get_game_state(img)
 
 exit(0)

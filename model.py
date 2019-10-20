@@ -48,14 +48,31 @@ class GameState:
     def __init__(self):
         self.reset()
 
-    def __str__(self):
-        gems_list = []
+    def get_gems_str(self) -> str:
+        """gets a nicely formatted string representation of self.gems"""
+        gems_list = ['+']
+        for x in range(COUNT_GEMS_H - 1):
+            gems_list.append('--')
+        gems_list.append('-+\n')
         for y in reversed(range(COUNT_GEMS_V)):
             for x in range(COUNT_GEMS_H):
+                if x == 0:
+                    gems_list.append('|')
                 gems_list.append('{}'.format(self.gems[x][y].value))
+                if x == COUNT_GEMS_H - 1:
+                    gems_list.append('|')
+                else:
+                    gems_list.append(' ')
             gems_list.append('\n')
+        gems_list.append('+')
+        for x in range(COUNT_GEMS_H - 1):
+            gems_list.append('--')
+        gems_list.append('-+\n')
+        return ''.join(gems_list)
+
+    def __str__(self):
         # ignore self.certainty for now
-        return 'phase: {}\ngems:\n{}'.format(self.phase, ''.join(gems_list))
+        return 'phase: {}\ngems:\n{}'.format(self.phase, self.get_gems_str())
 
     def __repr__(self):
         return 'phase={}, gems={}, certainty={}'.format(self.phase, self.gems, self.certainty)
