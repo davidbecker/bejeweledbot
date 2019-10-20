@@ -9,6 +9,9 @@ import model
 TITLE_BEJEWELED1 = 'Bejeweled Deluxe 1.87'
 # TITLE_BEJEWELED2 = 'Bejeweled 2 Deluxe 1.0'
 
+# filename to use when dumping files
+DUMP_FILENAME = 'dump'
+
 # hardcoded for now
 GEMSHEET = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Bejeweled Deluxe\\images\\gemsheet6.png'
 # gem dimensions in pixels
@@ -256,11 +259,23 @@ def get_game_state(screenshot):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
         gs.add_gem(x, y, model.GemType.GREEN)
 
-    if gs.check_board_complete():
+    complete = gs.check_board_complete()
+    if complete:
         gs.phase = model.GamePhase.IN_GAME
+    else:
+        import time
+        filename = DUMP_FILENAME + str(int(time.time()))
+        log_file_name = filename + '.log'
+        logging.error('failed to get game state - dumping to {}'.format(log_file_name))
 
-    logging.info(gs)
-    debug_show_image(screenshot)
+        fh = logging.FileHandler(filename)
+        fh.setLevel(logging.DEBUG)
+        file_logger = logging.getLogger("file")
+        file_logger.addHandler(fh)
+        file_logger.error('failed to get complete game state')
+        file_logger.info(gs)
+        cv2.imwrite(filename + '.bmp', screenshot)
+        exit(-1)
 
 
 # img = get_screenshot()
