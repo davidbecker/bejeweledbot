@@ -119,6 +119,83 @@ class BITMAPINFO(ctypes.Structure):
     ]
 
 
+# https://docs.microsoft.com/de-de/windows/win32/api/winuser/ns-winuser-keybdinput
+class KeyboardInput(ctypes.Structure):
+    _fields_ = [("wVk", ctypes.c_ushort),
+                ("wScan", ctypes.c_ushort),
+                ("dwFlags", ctypes.c_ulong),
+                ("time", ctypes.c_ulong),
+                ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))]
+
+
+class HardwareInput(ctypes.Structure):
+    _fields_ = [("uMsg", ctypes.c_ulong),
+                ("wParamL", ctypes.c_short),
+                ("wParamH", ctypes.c_ushort)]
+
+
+class MouseInput(ctypes.Structure):
+    _fields_ = [("dx", ctypes.c_long),
+                ("dy", ctypes.c_long),
+                ("mouseData", ctypes.c_ulong),
+                ("dwFlags", ctypes.c_ulong),
+                ("time", ctypes.c_ulong),
+                ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))]
+
+
+INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
+INPUT_HARDWARE = 2
+
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
+
+class _InputUnion(ctypes.Union):
+    _fields_ = [("ki", KeyboardInput),
+                ("mi", MouseInput),
+                ("hi", HardwareInput)]
+
+
+# https://docs.microsoft.com/de-de/windows/win32/api/winuser/ns-winuser-input
+class _Input(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_ulong),
+                ("ii", _InputUnion)]
+
+    def __init__(self, element):
+        if isinstance(element, KeyboardInput):
+            element_type = INPUT_KEYBOARD
+            union = _InputUnion(ki=element)
+        elif isinstance(element, MouseInput):
+            element_type = INPUT_MOUSE
+            union = _InputUnion(mi=element)
+        elif isinstance(element, HardwareInput):
+            element_type = INPUT_HARDWARE
+            union = _InputUnion(hi=element)
+        else:
+            raise TypeError("Unknown input type: %r" % element)
+
+        ctypes.Structure.__init__(self, type=element_type, ii=union)
+
+
+def make_input_array(inputs):
+    arguments = [(i,) for i in inputs]
+    InputArray = _Input * len(inputs)
+    return InputArray(*arguments)
+
+
+def send_input_array(input_array) -> None:
+    length = len(input_array)
+    assert length >= 0
+    size = ctypes.sizeof(input_array[0])
+    ptr = ctypes.pointer(input_array)
+
+    count_inserted = send_input(length, ptr, size)
+
+    if count_inserted != length:
+        last_error = get_last_error()
+        raise ValueError("windll.user32.SendInput(): {}".format(last_error))
+
 
 def get_module_name_from_window_handle(hWnd: ctypes.wintypes.HWND) -> str:
     """little wrapper around windows API calls to get the full filename of the exe of a window from its handle"""
@@ -171,6 +248,14 @@ def set_window_pos(hWnd: ctypes.wintypes.HWND, hWndInsertAfter: ctypes.wintypes.
     return SetWindowPos(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags)
 
 
+def send_input(cInputs: ctypes.wintypes.UINT, pInputs: ctypes.wintypes.LPVOID, cbSize: ctypes.wintypes.INT) -> ctypes.wintypes.UINT:
+    """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput"""
+    SendInput = ctypes.windll.user32.SendInput
+    SendInput.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.LPVOID, ctypes.wintypes.INT]
+    SendInput.restype = ctypes.wintypes.UINT
+    return SendInput(cInputs, pInputs, cbSize)
+
+
 def find_window(lpWindowName: str, lpClassName: str = None) -> ctypes.wintypes.HWND:
     """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-findwindoww"""
     FindWindowW = ctypes.windll.user32.FindWindowW
@@ -210,6 +295,20 @@ def get_module_file_name_ex_w(pid: ctypes.wintypes.DWORD) -> str:
     filename = ctypes.create_unicode_buffer(MAX_PATH)
     hprocess = open_process(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
     GetModuleFileName(hprocess, 0, filename, MAX_PATH)
+    close_handle(hprocess)
+    return filename.value
+
+
+def get_process_image_file_name_w(pid: ctypes.wintypes.DWORD) -> str:
+    """see https://docs.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getprocessimagefilenamew"""
+    GetProcessImageFileNameW = ctypes.windll.psapi.GetProcessImageFileNameW
+    GetProcessImageFileNameW.argtypes = [ctypes.wintypes.HANDLE,
+                                  ctypes.c_wchar_p, ctypes.wintypes.DWORD]
+    GetProcessImageFileNameW.restype = ctypes.wintypes.DWORD
+
+    filename = ctypes.create_unicode_buffer(MAX_PATH)
+    hprocess = open_process(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
+    GetProcessImageFileNameW(hprocess, filename, MAX_PATH)
     close_handle(hprocess)
     return filename.value
 
@@ -423,10 +522,10 @@ def get_bitmapinfo_from_bitmap(hdc: ctypes.wintypes.HDC, hbm: ctypes.wintypes.HB
         return None, None
     pixels = bytearray(info.bmiHeader.biSizeImage)
     char_array = ctypes.c_char * len(pixels)
-    if 0 == get_di_bits(hdc, hbm, 0, info.bmiHeader.biHeight, char_array.from_buffer(pixels), ctypes.byref(info), DIB_RGB_COLORS):
+    if 0 == get_di_bits(hdc, hbm, 0, info.bmiHeader.biHeight, char_array.from_buffer(pixels), ctypes.byref(info),
+                        DIB_RGB_COLORS):
         return None, None
     return info, pixels
-
 
 #
 #
@@ -447,4 +546,3 @@ def get_bitmapinfo_from_bitmap(hdc: ctypes.wintypes.HDC, hbm: ctypes.wintypes.HB
 #     CreateStreamOnHGlobal.argtypes = [ctypes.wintypes.HGLOBAL, ctypes.wintypes.BOOL, ctypes.wintypes.LPVOID]
 #     CreateStreamOnHGlobal.restype = ctypes.wintypes.INT
 #     return CreateStreamOnHGlobal(hGlobal, fDeleteOnRelease, ppstm)
-
