@@ -30,13 +30,13 @@ COLOR_WHITE = (255, 255, 255)
 img_gemssheet = cv2.cvtColor(cv2.imread(GEMSHEET), cv2.COLOR_BGR2GRAY)
 
 # extract all possible states for each color
-img_gems_yellow = img_gemssheet[0:2*GEM_HEIGHT]
-img_gems_white = img_gemssheet[2*GEM_HEIGHT:4*GEM_HEIGHT]
-img_gems_blue = img_gemssheet[4*GEM_HEIGHT:6*GEM_HEIGHT]
-img_gems_red = img_gemssheet[6*GEM_HEIGHT:8*GEM_HEIGHT]
-img_gems_purple = img_gemssheet[8*GEM_HEIGHT:10*GEM_HEIGHT]
-img_gems_orange = img_gemssheet[10*GEM_HEIGHT:12*GEM_HEIGHT]
-img_gems_green = img_gemssheet[12*GEM_HEIGHT:14*GEM_HEIGHT]
+img_gems_yellow = img_gemssheet[0:2 * GEM_HEIGHT]
+img_gems_white = img_gemssheet[2 * GEM_HEIGHT:4 * GEM_HEIGHT]
+img_gems_blue = img_gemssheet[4 * GEM_HEIGHT:6 * GEM_HEIGHT]
+img_gems_red = img_gemssheet[6 * GEM_HEIGHT:8 * GEM_HEIGHT]
+img_gems_purple = img_gemssheet[8 * GEM_HEIGHT:10 * GEM_HEIGHT]
+img_gems_orange = img_gemssheet[10 * GEM_HEIGHT:12 * GEM_HEIGHT]
+img_gems_green = img_gemssheet[12 * GEM_HEIGHT:14 * GEM_HEIGHT]
 
 # extract one gem state per color to use for template matching
 img_gem_yellow = img_gems_yellow[0:GEM_HEIGHT, 0:GEM_WIDTH]
@@ -210,6 +210,18 @@ def translate_picture_coordinates_to_model(min_point: tuple, max_point: tuple, p
     return x, y
 
 
+def translate_model_positions_to_picture_coordinates(min_point: tuple, max_point: tuple,
+                                                     model_points: list) -> list:
+    """translates a list of model coordinates into picture coordinates"""
+    # no offset to account for pixel mismatch for now, clicking on the middle of the gem should suffice
+    x0 = min_point[0]
+    y0 = max_point[1]
+    ret = []
+    for p in model_points:
+        ret.append((x0 + p[0] * GEM_WIDTH, y0 - p[1] * GEM_HEIGHT))
+    return ret
+
+
 def dump(msg: str = 'dump content to file', state: model.GameState = None, image=None) -> None:
     """dumps current game state to a file as well as saving the screenshot"""
     import time
@@ -228,7 +240,7 @@ def dump(msg: str = 'dump content to file', state: model.GameState = None, image
         cv2.imwrite(filename + '.bmp', image)
 
 
-def get_game_state(screenshot) -> model.GameState:
+def fill_game_state(screenshot, gs: model.GameState) -> (tuple, tuple):
     if screenshot is None:
         return None
     imggray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
@@ -252,7 +264,6 @@ def get_game_state(screenshot) -> model.GameState:
     min_point, max_point = get_min_max_point(matches_purple, min_point, max_point)
     min_point, max_point = get_min_max_point(matches_white, min_point, max_point)
 
-    gs = model.GameState()
     # add a gem for each found match to our game state
     for p in zip(*matches_yellow[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
