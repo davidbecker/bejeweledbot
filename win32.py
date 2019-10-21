@@ -59,6 +59,14 @@ DIB_RGB_COLORS = 0x00
 DIB_PAL_COLORS = 0x01
 DIB_PAL_INDICES = 0x02
 
+INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
+INPUT_HARDWARE = 2
+
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_ABSOLUTE = 0x8000
 
 # https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
 # class BITMAPFILEHEADER(ctypes.Structure):
@@ -70,6 +78,7 @@ DIB_PAL_INDICES = 0x02
 #         ('bfReserved2', ctypes.wintypes.WORD),  # must be zero
 #         ('bfOffBits', ctypes.wintypes.DWORD),  # byte offset to the pixel array
 #     ]
+
 
 class BITMAPFILEHEADER(ctypes.Structure):
     _pack_ = 1  # structure field byte alignment
@@ -143,14 +152,6 @@ class MouseInput(ctypes.Structure):
                 ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))]
 
 
-INPUT_MOUSE = 0
-INPUT_KEYBOARD = 1
-INPUT_HARDWARE = 2
-
-MOUSEEVENTF_MOVE = 0x0001
-MOUSEEVENTF_ABSOLUTE = 0x8000
-
-
 class _InputUnion(ctypes.Union):
     _fields_ = [("ki", KeyboardInput),
                 ("mi", MouseInput),
@@ -158,7 +159,7 @@ class _InputUnion(ctypes.Union):
 
 
 # https://docs.microsoft.com/de-de/windows/win32/api/winuser/ns-winuser-input
-class _Input(ctypes.Structure):
+class Input(ctypes.Structure):
     _fields_ = [("type", ctypes.c_ulong),
                 ("ii", _InputUnion)]
 
@@ -178,23 +179,52 @@ class _Input(ctypes.Structure):
         ctypes.Structure.__init__(self, type=element_type, ii=union)
 
 
-def make_input_array(inputs):
-    arguments = [(i,) for i in inputs]
-    InputArray = _Input * len(inputs)
-    return InputArray(*arguments)
+def send_input_item(input_item: Input) -> int:
+    """sends a single input item - returns 1 on success"""
+    size = ctypes.sizeof(input_item)
+    ptr = ctypes.pointer(input_item)
+    return send_input(1, ptr, size)
 
 
-def send_input_array(input_array) -> None:
-    length = len(input_array)
-    assert length >= 0
-    size = ctypes.sizeof(input_array[0])
-    ptr = ctypes.pointer(input_array)
+SM_CXSCREEN = 0
+SM_CYSCREEN = 1
 
-    count_inserted = send_input(length, ptr, size)
 
-    if count_inserted != length:
-        last_error = get_last_error()
-        raise ValueError("windll.user32.SendInput(): {}".format(last_error))
+def convert_window_to_screen_coordinates(x: int, y: int) -> (int, int):
+    x_screen = x * 0xFFFF / (get_system_metric(SM_CXSCREEN) - 1)
+    y_screen = y * 0xFFFF / (get_system_metric(SM_CYSCREEN) - 1)
+    return int(x_screen), int(y_screen)
+
+
+def click_on_window(hwnd: ctypes.wintypes.HWND, x_wnd: int, y_wnd: int) -> bool:
+    x = int(x_wnd)
+    y = int(y_wnd)
+    point = client_to_screen(hwnd, create_point(x, y))
+    x, y = convert_window_to_screen_coordinates(point.x, point.y)
+
+    # move to position
+    mi = MouseInput()
+    mi.dx = x
+    mi.dy = y
+    mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE
+    if send_input_item(Input(mi)) == 0:
+        return False
+
+    # click
+    mi.dx = 0
+    mi.dy = 0
+    mi.dwFlags = MOUSEEVENTF_LEFTDOWN
+    if send_input_item(Input(mi)) == 0:
+        return False
+
+    # release
+    mi.dx = 0
+    mi.dy = 0
+    mi.dwFlags = MOUSEEVENTF_LEFTUP
+    if send_input_item(Input(mi)) == 0:
+        return False
+
+    return True
 
 
 def get_module_name_from_window_handle(hWnd: ctypes.wintypes.HWND) -> str:
@@ -248,7 +278,8 @@ def set_window_pos(hWnd: ctypes.wintypes.HWND, hWndInsertAfter: ctypes.wintypes.
     return SetWindowPos(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags)
 
 
-def send_input(cInputs: ctypes.wintypes.UINT, pInputs: ctypes.wintypes.LPVOID, cbSize: ctypes.wintypes.INT) -> ctypes.wintypes.UINT:
+def send_input(cInputs: ctypes.wintypes.UINT, pInputs: ctypes.wintypes.LPVOID,
+               cbSize: ctypes.wintypes.INT) -> ctypes.wintypes.UINT:
     """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput"""
     SendInput = ctypes.windll.user32.SendInput
     SendInput.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.LPVOID, ctypes.wintypes.INT]
@@ -303,7 +334,7 @@ def get_process_image_file_name_w(pid: ctypes.wintypes.DWORD) -> str:
     """see https://docs.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getprocessimagefilenamew"""
     GetProcessImageFileNameW = ctypes.windll.psapi.GetProcessImageFileNameW
     GetProcessImageFileNameW.argtypes = [ctypes.wintypes.HANDLE,
-                                  ctypes.c_wchar_p, ctypes.wintypes.DWORD]
+                                         ctypes.c_wchar_p, ctypes.wintypes.DWORD]
     GetProcessImageFileNameW.restype = ctypes.wintypes.DWORD
 
     filename = ctypes.create_unicode_buffer(MAX_PATH)
@@ -426,6 +457,42 @@ def get_window_rect(hWnd: ctypes.wintypes.HWND) -> ctypes.wintypes.RECT:
     if GetWindowRect(hWnd, ctypes.byref(rect)):
         return rect
     return None
+
+
+def create_point(x: ctypes.wintypes.LONG = 0, y: ctypes.wintypes.LONG = 0) -> ctypes.wintypes.POINT:
+    p = ctypes.wintypes.POINT()
+    p.x = x
+    p.y = y
+    return p
+
+
+def client_to_screen(hWnd: ctypes.wintypes.HWND, lpPoint: ctypes.wintypes.POINT) -> ctypes.wintypes.POINT:
+    """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclientrect"""
+    ClientToScreen = ctypes.windll.user32.ClientToScreen
+    ClientToScreen.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.LPPOINT]
+    ClientToScreen.restype = ctypes.wintypes.BOOL
+    if ClientToScreen(hWnd, ctypes.pointer(lpPoint)):
+        return lpPoint
+    return None
+
+
+def map_window_points(hWndFrom: ctypes.wintypes.HWND, lpPoints: ctypes.wintypes.LPRECT,
+                      hWndTo: ctypes.wintypes.HWND = None, cPoints: ctypes.wintypes.UINT = 2) -> ctypes.wintypes.INT:
+    """see https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mapwindowpoints"""
+    MapWindowPoints = ctypes.windll.user32.MapWindowPoints
+    MapWindowPoints.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.HWND, ctypes.wintypes.LPRECT,
+                                ctypes.wintypes.UINT]
+    MapWindowPoints.restype = ctypes.wintypes.INT
+    return MapWindowPoints(hWndFrom, hWndTo, lpPoints, cPoints)
+
+
+def window_rect_to_screen(hWnd: ctypes.wintypes.HWND, rect: ctypes.wintypes.RECT) -> (int, int):
+    result = map_window_points(hWnd, ctypes.pointer(rect))
+    if result == 0:
+        raise ValueError('failed to translate window rect to screen. error code = {}'.format(get_last_error()))
+    vertical = ctypes.wintypes.WORD(result)
+    horizontal = ctypes.wintypes.WORD(result >> ctypes.sizeof(ctypes.wintypes.WORD))
+    return horizontal.value, vertical.value
 
 
 def get_device_context(hWnd: ctypes.wintypes.HWND = None) -> ctypes.wintypes.HDC:
