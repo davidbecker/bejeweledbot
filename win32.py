@@ -1,5 +1,8 @@
 import ctypes
 import ctypes.wintypes
+import faulthandler
+
+faulthandler.enable()
 
 HWND_BOTTOM = 1
 HWND_NOTOPMOST = -2
@@ -221,6 +224,15 @@ def click_on_window(hwnd: ctypes.wintypes.HWND, x_wnd: int, y_wnd: int) -> bool:
     mi.dx = 0
     mi.dy = 0
     mi.dwFlags = MOUSEEVENTF_LEFTUP
+    if send_input_item(Input(mi)) == 0:
+        return False
+
+    # move in the upper left corner to not hinder detection
+    point = client_to_screen(hwnd, create_point(0, 0))
+    x, y = convert_window_to_screen_coordinates(point.x, point.y)
+    mi.dx = x
+    mi.dy = y
+    mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE
     if send_input_item(Input(mi)) == 0:
         return False
 
