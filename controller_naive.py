@@ -11,12 +11,50 @@ class NaiveGameController(controller_base.AbstractGameController):
         count = 0
 
         # TODO implement scan for vertical match
+        for x in range(COUNT_GEMS_H):
+            for y in reversed(range(COUNT_GEMS_V)):
+                if game_state.gems[x][y] != last_gem:
+                    # gem type has changed
+                    if count == 1:
+                        # check if we have a V shape
+                        if y - 1 >= 0 and game_state.gems[x][y - 1] == last_gem:
+                            if x - 1 >= 0 and game_state.gems[x - 1][y] == last_gem:
+                                point1 = (x, y)
+                                point2 = (x - 1, y)
+                            if x + 1 < COUNT_GEMS_H and game_state.gems[x + 1][y] == last_gem:
+                                point1 = (x, y)
+                                point2 = (x + 1, y)
+                    elif count > 1:
+                        # A
+                        # B
+                        # A
+                        # A
+                        if y + (count + 2) < COUNT_GEMS_V and game_state.gems[x][y + (count + 2)] == last_gem:
+                            point1 = (x, y + (count + 2))
+                            point2 = (x, y + (count + 1))
+                        # A
+                        # A
+                        # B
+                        # A
+                        elif y - 1 >= 0 and game_state.gems[x][y - 1] == last_gem:
+                            point1 = (x, y)
+                            point2 = (x, y - 1)
+
+                    count = 0
+
+                count = count + 1
+                last_gem = game_state.gems[x][y]
+
+                if controller_base.check_valid_turn(point1, point2):
+                    return point1, point2
+
+            # reset gem on next row
+            last_gem = GemType.UNKNOWN
+            count = 0
 
         # scan if we can get a horizontal match
         for y in reversed(range(COUNT_GEMS_V)):
             for x in range(COUNT_GEMS_H):
-                if x == 7 and y == 3:
-                    x = x
                 if game_state.gems[x][y] != last_gem:
                     # gem type has changed
                     if count == 1:
@@ -33,6 +71,10 @@ class NaiveGameController(controller_base.AbstractGameController):
                         if x - (count + 2) >= 0 and game_state.gems[x - (count + 2)][y] == last_gem:
                             point1 = (x - (count + 2), y)
                             point2 = (x - (count + 1), y)
+                        # was A A B A
+                        elif x + 1 < COUNT_GEMS_H and game_state.gems[x + 1][y] == last_gem:
+                            point1 = (x, y)
+                            point2 = (x + 1, y)
                         # A C D
                         # B A A
                         elif x - (count + 1) >= 0 and y + 1 < COUNT_GEMS_V and \
