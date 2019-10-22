@@ -1,9 +1,11 @@
 import logging
+import controller_naive
 import win32
 import cv2
 import os
 import numpy as np
 import model
+import time
 
 # title of the game window to search for
 TITLE_BEJEWELED1 = 'Bejeweled Deluxe 1.87'
@@ -54,75 +56,14 @@ def find_game_window_handle():
     return win32.find_window(TITLE_BEJEWELED1)
 
 
-def get_screenshot() -> np.ndarray:
-    """grabs a screenshot and converts it to a numpy array usable by opencv"""
-    hWnd = find_game_window_handle()
-    if hWnd is None:
-        logging.error("unable to find window")
+def get_screenshot():
+    raw, width, height = win32.get_screenshot(find_game_window_handle())
+    if raw is None:
         return None
-    win32.bring_window_to_top(hWnd)
-
-    rect = win32.get_client_rect(hWnd)
-    if rect is None:
-        logging.error("unable to get window dimensions")
-        return None
-    width = rect.right - rect.left
-    height = rect.bottom - rect.top
-
-    window_rect = win32.get_window_rect(hWnd)
-    if window_rect is None:
-        logging.error("unable to get window dimensions")
-        return None
-
-    try:
-        hScreen = win32.get_device_context()
-        hDC = win32.create_compatible_device_context(hScreen)
-        hBitmap = win32.create_compatible_bitmap(hScreen, width, height)
-
-        old_obj = win32.select_object(hDC, hBitmap)
-        info = None
-        pixels = None
-        try:
-            # magic number 4 to account for window boarders
-            if win32.bit_blt(hDC, 0, 0, width, height, hScreen, window_rect.right - width - 4,
-                             window_rect.bottom - height - 4, win32.SRCCOPY):
-                info, pixels = win32.get_bitmapinfo_from_bitmap(hDC, hBitmap)
-        finally:
-            win32.select_object(hDC, old_obj)
-
-        if pixels is None:
-            logging.error("unable to retrieve pixel data from screen capture")
-            return None
-
-        arr = np.frombuffer(pixels, dtype=np.uint8)
-        arr.shape = (info.bmiHeader.biHeight, info.bmiHeader.biWidth, 4)
-        # image needs to be flipped
-        arr = np.flipud(arr)
-        # strip alpha channel
-        return cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
-
-    finally:
-        win32.delete_object(hBitmap)
-        win32.delete_dc(hDC)
-        win32.release_device_context(None, hScreen)
-
-
-# def get_game_folder() -> str:
-#     """tries to find the full path where the exe was started from"""
-#     handle = find_game_window_handle()
-#     if handle is None:
-#         return None
-#     exe = win32.get_module_name_from_window_handle(handle)
-#     if exe is None or exe.__len__() == 0:
-#         return None
-#     path, file = os.path.split(exe)
-#     return path
-
-
-# def gray_conversione(image):
-#     """converts an image to grayscale - stolen from https://stackoverflow.com/a/51287214"""
-#     gray = 0.07 * image[:, :, 2] + 0.72 * image[:, :, 1] + 0.21 * image[:, :, 0]
-#     return gray.astype(np.uint8)
+    arr = np.frombuffer(raw, dtype=np.uint8)
+    arr.shape = (height, width, 4)
+    # strip alpha channel
+    return cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
 
 
 def debug_show_image(image) -> bool:
@@ -333,14 +274,56 @@ def fill_game_state(screenshot, gs: model.GameState, dump_on_error: bool = False
     if complete:
         gs.phase = model.GamePhase.IN_GAME
 
-    if gs.phase == model.GamePhase.UNKNOWN:
-        dump(msg='failed to get game state', state=gs, image=screenshot)
+    # if gs.phase == model.GamePhase.UNKNOWN:
+    #     dump(msg='failed to get game state', state=gs, image=screenshot)
+    #     exit(-1)
+
+    # min_point and max_point are the coordinates of the upper left corner of each tile, so we change
+    # them to point to the center
+    try:
+        return (min_point[0] + GEM_WIDTH / 2, min_point[1] + GEM_HEIGHT / 2), (
+            max_point[0] + GEM_WIDTH / 2, max_point[1] + GEM_HEIGHT / 2)
+    except TypeError:
+        return None, None
+
+
+num_tries = 0
+max_tries = 30
+
+while num_tries < max_tries:
+    img = get_screenshot()
+    # img = cv2.imread("screenshot.bmp")
+
+    if img is None:
         exit(-1)
-    return gs
+    game_state = model.GameState()
+    game_area_min, game_area_max = fill_game_state(img, game_state)
 
+    hwnd = find_game_window_handle()
 
-# img = get_screenshot()
-img = cv2.imread("screenshot.bmp")
-game_state = get_game_state(img)
+    controller = controller_naive.NaiveGameController()
+    if controller_naive.NaiveGameController.can_handle_game_state(controller, game_state):
+        print(game_state)
+        point1, point2 = controller_naive.NaiveGameController.next_turn(controller_naive, game_state)
+        if point1 is None or point2 is None:
+            dump('no possible turn', state=game_state, image=img)
+            exit(-1)
+        print(game_state)
+        logging.info('next turn: {} to {}'.format(point1, point2))
+        win32.bring_window_to_top(hwnd)
+        for c in translate_model_positions_to_picture_coordinates(game_area_min, game_area_max, (point1, point2)):
+            win32.click_on_window(hwnd, c[0], c[1])
+        num_tries = 0
+    else:
+        logging.debug(game_state)
+        # allow for more time to not annoy me too much
+        waiting = 1.5
+        if num_tries > 5:
+            waiting = waiting + .5
+        logging.info('can\'t handle game state. wait {} seconds and repeat'.format(waiting))
+        time.sleep(waiting)
+        # click in upper left corner to clear selection
+        win32.click_on_window(hwnd, 0, 0)
+    num_tries = num_tries + 1
 
 exit(0)

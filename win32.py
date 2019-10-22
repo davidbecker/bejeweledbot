@@ -1,5 +1,7 @@
 import ctypes
 import ctypes.wintypes
+import win32gui
+import win32ui
 import faulthandler
 
 faulthandler.enable()
@@ -199,7 +201,18 @@ def convert_window_to_screen_coordinates(x: int, y: int) -> (int, int):
     return int(x_screen), int(y_screen)
 
 
+def is_window(hwnd: ctypes.wintypes.HWND) -> bool:
+    """https://docs.microsoft.com/de-de/windows/win32/api/winuser/nf-winuser-iswindow?redirectedfrom=MSDN"""
+    IsWindow = ctypes.windll.user32.IsWindow
+    IsWindow.argtypes = [ctypes.wintypes.HWND]
+    IsWindow.restype = ctypes.wintypes.BOOL
+    return IsWindow(hwnd)
+
+
 def click_on_window(hwnd: ctypes.wintypes.HWND, x_wnd: int, y_wnd: int) -> bool:
+    if not is_window(hwnd):
+        return False
+
     x = int(x_wnd)
     y = int(y_wnd)
     point = client_to_screen(hwnd, create_point(x, y))
@@ -605,6 +618,38 @@ def get_bitmapinfo_from_bitmap(hdc: ctypes.wintypes.HDC, hbm: ctypes.wintypes.HB
                         DIB_RGB_COLORS):
         return None, None
     return info, pixels
+
+
+def get_screenshot(hwnd=None) -> (bytearray, int, int):
+    if hwnd is None:
+        return None, 0, 0
+    bring_window_to_top(hwnd)
+
+    left, top, right, bot = win32gui.GetClientRect(hwnd)
+    w = right - left
+    h = bot - top
+
+    hwndDC = win32gui.GetWindowDC(hwnd)
+    mfcDC = win32ui.CreateDCFromHandle(hwndDC)
+    saveDC = mfcDC.CreateCompatibleDC()
+
+    saveBitMap = win32ui.CreateBitmap()
+    saveBitMap.CreateCompatibleBitmap(mfcDC, w, h)
+
+    old = saveDC.SelectObject(saveBitMap)
+    result = ctypes.windll.user32.PrintWindow(hwnd, saveDC.GetSafeHdc(), 1)
+    bmpinfo = saveBitMap.GetInfo()
+    bmpstr = saveBitMap.GetBitmapBits(True)
+    saveDC.SelectObject(old)
+
+    win32gui.DeleteObject(saveBitMap.GetHandle())
+    saveDC.DeleteDC()
+    mfcDC.DeleteDC()
+    win32gui.ReleaseDC(hwnd, hwndDC)
+
+    if result == 1:
+        return bmpstr, bmpinfo['bmWidth'], bmpinfo['bmHeight']
+    return None, 0, 0
 
 #
 #
