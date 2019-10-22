@@ -154,8 +154,8 @@ def get_min_max_point(matches, min_point: tuple = None, max_point: tuple = None)
         y_min = min_point[1]
 
     if max_point is not None:
-        x_max = min_point[0]
-        y_max = min_point[1]
+        x_max = max_point[0]
+        y_max = max_point[1]
 
     for p in zip(*matches[::-1]):
         if x_min is None:
