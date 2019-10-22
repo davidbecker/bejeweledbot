@@ -1,5 +1,6 @@
 import controller_base
 from model import *
+import logging
 
 
 class NaiveGameController(controller_base.AbstractGameController):
@@ -81,6 +82,10 @@ class NaiveGameController(controller_base.AbstractGameController):
 
                 if controller_base.check_valid_turn(point1, point2):
                     return point1, point2
+                elif point1 != (0, 0) and point2 != (0, 0):
+                    logging.debug('invalid turn selected: x={},y={} {} -> {}'.format(x, y, point1, point2))
+
+                point1 = point2 = (0, 0)
 
             # reset gem on next row
             last_gem = GemType.UNKNOWN
@@ -136,8 +141,8 @@ class NaiveGameController(controller_base.AbstractGameController):
                 elif x == COUNT_GEMS_H - 1 and count == 1:
                     # check for A B A A at the end of the board
                     if game_state.gems[x - (count + 2)][y] == last_gem:
-                        point1 = (x + (count + 2), y)
-                        point2 = (x + (count + 1), y)
+                        point1 = (x - (count + 2), y)
+                        point2 = (x - (count + 1), y)
                     # check for
                     # B A A
                     # A C D
@@ -158,6 +163,10 @@ class NaiveGameController(controller_base.AbstractGameController):
 
                 if controller_base.check_valid_turn(point1, point2):
                     return point1, point2
+                elif point1 != (0, 0) and point2 != (0, 0):
+                    logging.debug('invalid turn selected: x={},y={} {} -> {}'.format(x, y, point1, point2))
+
+                point1 = point2 = (0, 0)
 
             # reset gem on next line
             last_gem = GemType.UNKNOWN
