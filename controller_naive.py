@@ -39,8 +39,42 @@ class NaiveGameController(controller_base.AbstractGameController):
                         elif y - 1 >= 0 and game_state.gems[x][y - 1] == last_gem:
                             point1 = (x, y)
                             point2 = (x, y - 1)
+                        # A C
+                        # A D
+                        # B A
+                        elif x + 1 < COUNT_GEMS_H and game_state.gems[x + 1][y] == last_gem:
+                            point1 = (x, y)
+                            point2 = (x + 1, y)
+                        # C A
+                        # D A
+                        # A B
+                        elif x - 1 >= 0 and game_state.gems[x - 1][y] == last_gem:
+                            point1 = (x, y)
+                            point2 = (x - 1, y)
+                        # B A
+                        # A C
+                        # A D
+                        elif x + 1 < COUNT_GEMS_H and y + 3 < COUNT_GEMS_V and game_state.gems[x + 1][y + 3] == last_gem:
+                            point1 = (x, y + 3)
+                            point2 = (x + 1, y + 3)
+                        # A B
+                        # C A
+                        # D A
+                        elif x - 1 >= 0 and y + 3 < COUNT_GEMS_V and game_state.gems[x - 1][y + 3] == last_gem:
+                            point1 = (x, y + 3)
+                            point2 = (x - 1, y + 3)
 
                     count = 0
+                elif y == 0 and count == 1:
+                    # check for
+                    # A
+                    # B
+                    # A
+                    # A
+                    # at the end of the board
+                    if game_state.gems[x][y + (count + 2)] == last_gem:
+                        point1 = (x, y + (count + 2))
+                        point2 = (x, y + (count + 1))
 
                 count = count + 1
                 last_gem = game_state.gems[x][y]
