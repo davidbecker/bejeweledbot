@@ -16,7 +16,8 @@ DUMP_FILENAME = 'dump'
 DUMP_LOCATION = 'R:\\dump\\'
 
 # hardcoded for now
-GEMSHEET = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Bejeweled Deluxe\\images\\gemsheet6.png'
+# GEMSHEET = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Bejeweled Deluxe\\images\\gemsheet6.png'
+GEMSHEET = 'E:\\Steam\\SteamApps\\common\\Bejeweled Deluxe\\images\\gemsheet6.png'
 # gem dimensions in pixels
 GEM_WIDTH = GEM_HEIGHT = 52
 
@@ -28,6 +29,11 @@ COLOR_YELLOW = (0, 255, 255)
 COLOR_ORANGE = (0, 128, 255)
 COLOR_PURPLE = (128, 0, 128)
 COLOR_WHITE = (255, 255, 255)
+
+if not os.path.exists(GEMSHEET):
+    logging.error('invalid gem tile sheet \'{}\''.format(GEMSHEET))
+    exit(-1)
+
 
 # load the tile sheet with all the gems
 # img_gemssheet = cv2.imread(GEMSHEET, cv2.IMREAD_GRAYSCALE)
