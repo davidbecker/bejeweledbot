@@ -1,6 +1,7 @@
 import logging
 import win32
 import cv2
+import os
 import numpy as np
 import model
 
@@ -10,6 +11,7 @@ TITLE_BEJEWELED1 = 'Bejeweled Deluxe 1.87'
 
 # filename to use when dumping files
 DUMP_FILENAME = 'dump'
+DUMP_LOCATION = 'R:\\dump\\'
 
 # hardcoded for now
 GEMSHEET = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Bejeweled Deluxe\\images\\gemsheet6.png'
@@ -224,12 +226,19 @@ def translate_model_positions_to_picture_coordinates(min_point: tuple, max_point
 
 def dump(msg: str = 'dump content to file', state: model.GameState = None, image=None) -> None:
     """dumps current game state to a file as well as saving the screenshot"""
-    import time
     filename = DUMP_FILENAME + str(int(time.time()))
+
+    if not os.path.exists(DUMP_LOCATION):
+        os.makedirs(DUMP_LOCATION)
+
+    # if we have a dumping location we dump there instead of the current location
+    if os.path.exists(DUMP_LOCATION):
+        filename = DUMP_LOCATION + filename
+
     log_file_name = filename + '.log'
     logging.error('{} - dumping to {}'.format(msg, log_file_name))
 
-    fh = logging.FileHandler(filename)
+    fh = logging.FileHandler(log_file_name)
     fh.setLevel(logging.DEBUG)
     file_logger = logging.getLogger("file")
     file_logger.addHandler(fh)
@@ -240,9 +249,9 @@ def dump(msg: str = 'dump content to file', state: model.GameState = None, image
         cv2.imwrite(filename + '.bmp', image)
 
 
-def fill_game_state(screenshot, gs: model.GameState) -> (tuple, tuple):
+def fill_game_state(screenshot, gs: model.GameState, dump_on_error: bool = False, terminate_on_error: bool = False) -> (tuple, tuple):
     if screenshot is None:
-        return None
+        raise ValueError('no screenshot given')
     imggray = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
     # find all matches for each gem type
@@ -264,28 +273,61 @@ def fill_game_state(screenshot, gs: model.GameState) -> (tuple, tuple):
     min_point, max_point = get_min_max_point(matches_purple, min_point, max_point)
     min_point, max_point = get_min_max_point(matches_white, min_point, max_point)
 
+    if min_point is None or max_point is None:
+        raise Exception('failed to find game area')
+
+    gs.reset()
+
     # add a gem for each found match to our game state
     for p in zip(*matches_yellow[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.YELLOW)
+        if not gs.add_gem(x, y, model.GemType.YELLOW):
+            if dump_on_error:
+                dump('invalid position for yellow gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_white[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.WHITE)
+        if not gs.add_gem(x, y, model.GemType.WHITE):
+            if dump_on_error:
+                dump('invalid position for white gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_blue[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.BLUE)
+        if not gs.add_gem(x, y, model.GemType.BLUE):
+            if dump_on_error:
+                dump('invalid position for blue gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_red[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.RED)
+        if not gs.add_gem(x, y, model.GemType.RED):
+            if dump_on_error:
+                dump('invalid position for red gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_purple[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.PURPLE)
+        if not gs.add_gem(x, y, model.GemType.PURPLE):
+            if dump_on_error:
+                dump('invalid position for purple gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_orange[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.ORANGE)
+        if not gs.add_gem(x, y, model.GemType.ORANGE):
+            if dump_on_error:
+                dump('invalid position for orange gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
     for p in zip(*matches_green[::-1]):
         x, y = translate_picture_coordinates_to_model(min_point, max_point, p)
-        gs.add_gem(x, y, model.GemType.GREEN)
+        if not gs.add_gem(x, y, model.GemType.GREEN):
+            if dump_on_error:
+                dump('invalid position for green gem', state=gs, image=screenshot)
+            if terminate_on_error:
+                exit(-1)
 
     complete = gs.check_board_complete()
     if complete:
